@@ -9,4 +9,4 @@
 #SBATCH --output=%j_%x.out
 #SBATCH --error=%j_%x.err
 module load python-cbrg
-python training/Train_XGB_ENSG.py
+python training/Train_XGB.py

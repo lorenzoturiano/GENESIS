@@ -9,91 +9,47 @@ from pathlib import Path
 
 np.random.seed(42)
 
-BASE = Path("/project/Wellcome_Discovery/datashare/lturiano/data")
+data = "/project/Wellcome_Discovery/datashare/lturiano/data/"
+home = "/project/Wellcome_Discovery/lturiano/GENESIS/"
+sriva = "/project/Wellcome_Discovery/datashare/sriva/GENESIS/"
 
-rna = sc.read_h5ad(BASE / "rna_filt_aligned.h5ad")
-gex  = sc.read_h5ad(BASE / "gex_filt_aligned.h5ad")
-fake = sc.read_h5ad(BASE / "fake_RNA_VAE_UNET_log.h5ad")
+# Load breast data
+rna = sc.read_h5ad(sriva+"RNA_filt_log_subset.h5ad")
+gex = sc.read_h5ad(sriva+"GEX_filt_log_subset.h5ad")
+fake = sc.read_h5ad(data+"breast_fake_RNA_PermInv_VAE_UNET.h5ad")
 
-marker_genes = {
-    "T cell": [
-        "TRAC", "TRBC1", "TRBC2", "CD3D", "CD3E", "CD2", "LCK", "IL7R", "CCR7",
-    ],
+marker_genes = {'T cell': ['IL7R', 'CCL5', 'PTPRC', 'CXCR4', 'GNLY', 'CD2', 'SRGN'],
+                'basal cell': ['KRT14', 'KRT17', 'DST', 'KRT5', 'SAA1', 'ACTA2', 'SFN'],
+                'endothelial cell': ['SELE', 'ACKR1', 'FABP4', 'STC1', 'ANGPT2', 'CSF3'],
+                'fibroblast': ['DCN', 'APOD', 'CFD', 'TNFAIP6', 'LUM', 'COL1A2', 'COL1A1'],
+                'macrophage': ['HLA-DRA', 'IL1B', 'HLA-DPA1', 'HLA-DPB1', 'HLA-DRB1', 'CD74', 'CCL3']
+              }
 
-    "lymphocyte": [
-        # broad lymphoid bucket (T/NK/B markers + pan-lymphoid)
-        "PTPRC", "CD74", "MS4A1", "CD79A", "CD79B", "CD3D", "TRAC", "NKG7", "GNLY",
-    ],
-
-    "myeloid cell": [
-        # broad myeloid bucket
-        "LYZ", "S100A8", "S100A9", "FCN1", "LGALS3", "CTSS", "TYMP", "VCAN",
-    ],
-
-    "macrophage": [
-        "LYZ", "LST1", "CST3", "CTSS", "FCER1G", "TYROBP", "C1QA", "C1QB", "C1QC",
-        "APOE", "MSR1", "MARCO",
-    ],
-
-    "dendritic cell": [
-        "FCER1A", "CST3", "CD74", "HLA-DRA", "HLA-DPA1", "HLA-DPB1", "CLEC10A",
-        "ITGAX",
-    ],
-
-    "endothelial cell": [
-        "PECAM1", "VWF", "KDR", "ESAM", "CDH5", "RAMP2", "ENG", "CLDN5",
-    ],
-
-    "mural cell": [
-        # pericyte / vascular smooth muscle-like
-        "RGS5", "PDGFRB", "CSPG4", "MCAM", "DES", "TAGLN", "ACTA2", "MYH11",
-    ],
-
-    "fibroblast": [
-        "COL1A1", "COL1A2", "DCN", "LUM", "COL3A1", "FBLN1", "C7", "PDGFRA",
-    ],
-
-    "epithelial cell": [
-        # broad epithelial
-        "EPCAM", "KRT8", "KRT18", "KRT19", "KRT7", "MUC1", "TACSTD2",
-    ],
-
-    "duct cell": [
-        # ductal / epithelial-ductal
-        "KRT19", "KRT8", "KRT18", "KRT7", "MUC1", "KRT17", "SLC4A4", "CFTR",
-        "SOX9",
-    ],
-
-    "myocyte": [
-        # muscle (striated / smooth-ish mix for robustness)
-        "ACTA1", "ACTN2", "TTN", "MYH1", "MYH2", "TNNT3", "CKM",
-        "DES", "TAGLN",
-    ],
-
-    "neural cell": [
-        "SOX2", "NES", "TUBB3", "RBFOX3", "SLC1A3", "PLP1", "MBP", "GFAP",
-    ],
-}
-
-rna_gene_names = set(rna.var["feature_name"])
 genes = []
 for row in list(marker_genes.values()):
     for item in row:
-        if item not in genes and item in rna_gene_names:
-            genes.append(item)
-            
-np.random.shuffle(genes)
+        if item not in genes:
+            genes.append(item)  
+# np.random.shuffle(genes)
 
 df_rna = pd.DataFrame(index   = rna.obs.index,
                       columns = genes,
                       data    = rna.X[:, rna.var.feature_name.isin(genes)])
 
+df_gex = pd.DataFrame(index   = gex.obs.index,
+                      columns = genes,
+                      data    = gex.X[:, gex.var.feature_name.isin(genes)])
+
+df_fake = pd.DataFrame(index   = fake.obs.index,
+                       columns = genes,
+                       data    = fake.X[:, fake.var.feature_name.isin(genes)])
 # Encode labels
 label_encoder = LabelEncoder()
 label_encoder.fit(rna.obs["cell_type"].values.tolist())
-label_encoder.classes_
 
 df_rna["cell_type"]  = label_encoder.transform(rna.obs["cell_type"].values.tolist())
+df_gex["cell_type"]  = label_encoder.transform(gex.obs["cell_type"].values.tolist())
+df_fake["cell_type"] = label_encoder.transform(rna.obs["cell_type"].values.tolist())
 
 # Create train-test split (final evaluation set)
 X_train_rna, X_test_rna, y_train_rna, y_test_rna = train_test_split(df_rna[df_rna.columns[:-1]],
@@ -102,6 +58,20 @@ X_train_rna, X_test_rna, y_train_rna, y_test_rna = train_test_split(df_rna[df_rn
                                                                     random_state=42,
                                                                     stratify=df_rna[df_rna.columns[-1]]
                                                                     )
+# Create train-test split (final evaluation set)
+X_train_gex, X_test_gex, y_train_gex, y_test_gex = train_test_split(df_gex[df_gex.columns[:-1]],
+                                                                    df_gex[df_gex.columns[-1]],
+                                                                    test_size=0.15,
+                                                                    random_state=42,
+                                                                    stratify=df_gex[df_gex.columns[-1]]
+                                                                    )
+# Create train-test split (final evaluation set)
+X_train_fake, X_test_fake, y_train_fake, y_test_fake = train_test_split(df_fake[df_fake.columns[:-1]],
+                                                                        df_fake[df_fake.columns[-1]],
+                                                                        test_size=0.15,
+                                                                        random_state=42,
+                                                                        stratify=df_fake[df_fake.columns[-1]]
+                                                                        )
 
 # Training and hyperparameter setting xgboost on scRNA
 # Define XGBoost classifier
@@ -134,4 +104,20 @@ print(clf_cv.best_params_)
 
 # Evaluate on final test set
 best_model = clf_cv.best_estimator_
-best_model.save_model("best_xgb_model.json")
+best_model.save_model(home + "weights/breast_best_xgb_model.json")
+
+y_pred_rna = best_model.predict(X_test_rna)
+y_pred_gex = best_model.predict(X_test_gex)
+y_pred_fake = best_model.predict(X_test_fake)
+
+# Classification report
+print("Classification Report:")
+print(classification_report(y_test_rna.values, y_pred_rna, target_names=label_encoder.classes_))
+
+# Classification report
+print("Classification Report for GEX:")
+print(classification_report(y_test_gex.values, y_pred_gex, target_names=label_encoder.classes_))
+
+# Classification report
+print("Classification Report for GEX:")
+print(classification_report(y_test_fake.values, y_pred_fake, target_names=label_encoder.classes_))

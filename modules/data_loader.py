@@ -3,39 +3,72 @@ import torch
 from torch.utils.data import Dataset, Sampler, DataLoader
 
 class DualAnnDataDataset(Dataset):
-    def __init__(self, adata1, adata2, cell_type_key):
+    def __init__(self, adata1, adata2, cell_type_key, base_seed: int = 0):
         """
-        Parameters:
-         - adata1, adata2: AnnData objects with the same number of cells.
-         - cell_type_key: key in adata.obs that identifies cell populations.
+        adata1 = input (e.g., multiome GEX)
+        adata2 = target (e.g., scRNA)
+        They do NOT need to be paired by barcode. Only cell_type_key is required.
         """
-        if adata1.shape[0] != adata2.shape[0]:
-            raise ValueError("Both AnnData objects must have the same number of cells.")
-        
         self.adata1 = adata1
         self.adata2 = adata2
-        # Assumes both adata have the same cell order for the given cell_type_key.
-        self.cell_types = adata1.obs[cell_type_key].values
-        
+        self.cell_type_key = cell_type_key
+        self.base_seed = int(base_seed)
+
+        # cell types for each source cell (adata1)
+        self.src_ct = np.asarray(self.adata1.obs[self.cell_type_key].values)
+
+        # Build: cell_type -> list of indices in adata2
+        tgt_ct = np.asarray(self.adata2.obs[self.cell_type_key].values)
+        self.ct_to_tgt_indices = {}
+        for ct in np.unique(tgt_ct):
+            self.ct_to_tgt_indices[ct] = np.where(tgt_ct == ct)[0]
+
+        # Validate: every source ct exists in target
+        missing = sorted(set(np.unique(self.src_ct)) - set(self.ct_to_tgt_indices.keys()))
+        if missing:
+            raise ValueError(
+                f"Some cell types exist in adata1 but not in adata2: {missing}"
+            )
+
+        # Will be filled by set_epoch()
+        self.target_map = np.empty(self.adata1.n_obs, dtype=np.int64)
+        self.set_epoch(0)
+
+    def set_epoch(self, epoch: int):
+        """
+        Call this at the start of each epoch to resample targets within each cell type.
+        Mapping is fixed during the epoch.
+        """
+        rng = np.random.default_rng(self.base_seed + int(epoch))
+
+        # For each cell type: sample target indices (with replacement) for each source cell in that ct
+        for ct in np.unique(self.src_ct):
+            src_idx = np.where(self.src_ct == ct)[0]
+            tgt_pool = self.ct_to_tgt_indices[ct]
+            sampled_tgt = rng.choice(tgt_pool, size=len(src_idx), replace=True)
+            self.target_map[src_idx] = sampled_tgt
+
     def __len__(self):
-        return self.adata1.shape[0]
-    
+        return self.adata1.n_obs
+
     def __getitem__(self, idx):
-        # Get expression data for cell at index idx.
-        x1 = self.adata1.X[idx]
-        x2 = self.adata2.X[idx]
-        
-        # If stored as sparse, convert to dense.
-        if hasattr(x1, "toarray"):
-            x1 = x1.toarray().squeeze()
-        if hasattr(x2, "toarray"):
-            x2 = x2.toarray().squeeze()
-        
-        # Convert to torch tensors.
-        x1 = torch.tensor(x1, dtype=torch.float)
-        x2 = torch.tensor(x2, dtype=torch.float)
-        cell_type = self.cell_types[idx]
-        return x1, x2, cell_type
+        j = int(self.target_map[idx])
+
+        x = self.adata1.X[idx]
+        y = self.adata2.X[j]
+
+        # convert to dense if needed (common with sparse AnnData)
+        if not isinstance(x, np.ndarray):
+            x = x.toarray().ravel()
+        if not isinstance(y, np.ndarray):
+            y = y.toarray().ravel()
+
+        x = torch.tensor(x, dtype=torch.float32)
+        y = torch.tensor(y, dtype=torch.float32)
+
+        # return ct too if you want debugging/monitoring
+        ct = self.src_ct[idx]
+        return x, y, ct
 
 
 class CellTypeBatchSampler(Sampler):

@@ -177,6 +177,11 @@ class RNA_VAE_UNET(nn.Module):
             optimizer = optim.Adam(self.parameters(), lr=lr)
         
         for epoch in range(n_epochs):
+            # Resample targets-within-cell-type once per epoch (if supported)
+            ds = getattr(dataloader, "dataset", None)
+            if ds is not None and hasattr(ds, "set_epoch"):
+                ds.set_epoch(epoch)
+
             r_loss, kl_loss, total_loss = [], [], []
             for batch_idx, (gene_exp, real_rna, cell_types) in enumerate(dataloader):
                 optimizer.zero_grad()

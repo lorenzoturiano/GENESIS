@@ -7,14 +7,23 @@ from sklearn.preprocessing import LabelEncoder
 import xgboost
 from pathlib import Path
 import joblib
+import os
 
 np.random.seed(42)
 
-BASE = Path("/project/Wellcome_Discovery/datashare/lturiano/data")
+home = Path("/project/Wellcome_Discovery/lturiano/GENESIS")
+data = Path("/project/Wellcome_Discovery/datashare/lturiano/data")
 
-rna = sc.read_h5ad(BASE / "rna_filt_aligned.h5ad")
-gex  = sc.read_h5ad(BASE / "gex_filt_aligned.h5ad")
-fake = sc.read_h5ad(BASE / "fake_RNA_VAE_UNET_log.h5ad")
+print("Everything ready!\n")
+directory = home / "02_weights"
+if os.path.isdir(directory):
+    print(f"Directory found: {directory}")
+else:
+    print(f"Directory not found: {directory}")
+
+rna = sc.read_h5ad(data / "rna_filt_aligned.h5ad")
+gex  = sc.read_h5ad(data / "gex_filt_aligned.h5ad")
+fake = sc.read_h5ad(data / "fake_PermInv_VAE_UNET.h5ad")
 
 marker_genes = {'T cell': ['ENSG00000156482',
   'ENSG00000134419',
@@ -23,7 +32,9 @@ marker_genes = {'T cell': ['ENSG00000156482',
   'ENSG00000149273',
   'ENSG00000177954',
   'ENSG00000108107',
-  'ENSG00000143947'],
+  'ENSG00000143947',
+  'ENSG00000198918',
+  'ENSG00000167526'],
  'dendritic cell': ['ENSG00000019582',
   'ENSG00000204287',
   'ENSG00000223865',
@@ -31,7 +42,9 @@ marker_genes = {'T cell': ['ENSG00000156482',
   'ENSG00000138326',
   'ENSG00000196126',
   'ENSG00000179344',
-  'ENSG00000196735'],
+  'ENSG00000196735',
+  'ENSG00000265681',
+  'ENSG00000161970'],
  'duct cell': ['ENSG00000143153',
   'ENSG00000119888',
   'ENSG00000272398',
@@ -39,7 +52,9 @@ marker_genes = {'T cell': ['ENSG00000156482',
   'ENSG00000240972',
   'ENSG00000185883',
   'ENSG00000219200',
-  'ENSG00000175061'],
+  'ENSG00000175061',
+  'ENSG00000111057',
+  'ENSG00000181885'],
  'endothelial cell': ['ENSG00000172889',
   'ENSG00000065054',
   'ENSG00000127920',
@@ -47,7 +62,9 @@ marker_genes = {'T cell': ['ENSG00000156482',
   'ENSG00000165949',
   'ENSG00000129538',
   'ENSG00000164035',
-  'ENSG00000102755'],
+  'ENSG00000102755',
+  'ENSG00000131477',
+  'ENSG00000175899'],
  'epithelial cell': ['ENSG00000272398',
   'ENSG00000143153',
   'ENSG00000119888',
@@ -55,7 +72,9 @@ marker_genes = {'T cell': ['ENSG00000156482',
   'ENSG00000111057',
   'ENSG00000240972',
   'ENSG00000166347',
-  'ENSG00000170421'],
+  'ENSG00000170421',
+  'ENSG00000120306',
+  'ENSG00000163399'],
  'fibroblast': ['ENSG00000011465',
   'ENSG00000111341',
   'ENSG00000139329',
@@ -63,7 +82,9 @@ marker_genes = {'T cell': ['ENSG00000156482',
   'ENSG00000132386',
   'ENSG00000182326',
   'ENSG00000077942',
-  'ENSG00000142173'],
+  'ENSG00000142173',
+  'ENSG00000148180',
+  'ENSG00000164692'],
  'lymphocyte': ['ENSG00000166710',
   'ENSG00000105374',
   'ENSG00000234745',
@@ -71,7 +92,9 @@ marker_genes = {'T cell': ['ENSG00000156482',
   'ENSG00000110848',
   'ENSG00000204525',
   'ENSG00000140988',
-  'ENSG00000271503'],
+  'ENSG00000271503',
+  'ENSG00000142541',
+  'ENSG00000077984'],
  'macrophage': ['ENSG00000019582',
   'ENSG00000204287',
   'ENSG00000196126',
@@ -79,7 +102,9 @@ marker_genes = {'T cell': ['ENSG00000156482',
   'ENSG00000231389',
   'ENSG00000223865',
   'ENSG00000173372',
-  'ENSG00000110077'],
+  'ENSG00000110077',
+  'ENSG00000204472',
+  'ENSG00000196735'],
  'mural cell': ['ENSG00000101335',
   'ENSG00000122786',
   'ENSG00000163453',
@@ -87,7 +112,9 @@ marker_genes = {'T cell': ['ENSG00000156482',
   'ENSG00000185633',
   'ENSG00000148671',
   'ENSG00000152583',
-  'ENSG00000107796'],
+  'ENSG00000107796',
+  'ENSG00000140545',
+  'ENSG00000135744'],
  'myeloid cell': ['ENSG00000087086',
   'ENSG00000158869',
   'ENSG00000204472',
@@ -95,7 +122,9 @@ marker_genes = {'T cell': ['ENSG00000156482',
   'ENSG00000163220',
   'ENSG00000167996',
   'ENSG00000196154',
-  'ENSG00000130066'],
+  'ENSG00000130066',
+  'ENSG00000122862',
+  'ENSG00000051523'],
  'myocyte': ['ENSG00000118194',
   'ENSG00000129991',
   'ENSG00000175084',
@@ -103,7 +132,9 @@ marker_genes = {'T cell': ['ENSG00000156482',
   'ENSG00000173991',
   'ENSG00000159251',
   'ENSG00000109846',
-  'ENSG00000140416'],
+  'ENSG00000140416',
+  'ENSG00000114854',
+  'ENSG00000156885'],
  'neural cell': ['ENSG00000078328',
   'ENSG00000198763',
   'ENSG00000198840',
@@ -111,7 +142,9 @@ marker_genes = {'T cell': ['ENSG00000156482',
   'ENSG00000212907',
   'ENSG00000174469',
   'ENSG00000198786',
-  'ENSG00000198712']}
+  'ENSG00000198712',
+  'ENSG00000198899',
+  'ENSG00000198886']}
 
 rna_gene_names = set(rna.var_names)
 genes = []
@@ -128,7 +161,7 @@ label_encoder.fit(rna.obs["cell_type"].values.tolist())
 
 # save genes + label mapping
 meta = {"genes": genes, "label_classes": label_encoder.classes_}
-joblib.dump(meta, "meta.joblib")
+joblib.dump(meta, home / "02_weights" / "top10_xgb_meta.joblib")
 
 df_rna = pd.DataFrame(index   = rna.obs.index,
                       columns = genes,
@@ -201,7 +234,7 @@ print(clf_cv.best_params_)
 
 # Evaluate on final test set
 best_model = clf_cv.best_estimator_
-best_model.save_model("best_xgb_model.json")
+best_model.save_model(home / "02_weights" / "top10_xgb.json")
 
 model_rna = best_model
 

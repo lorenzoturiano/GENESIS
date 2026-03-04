@@ -3,25 +3,6 @@ import pandas as pd
 import anndata
 from scipy.special import kl_div
 
-MARKERS = {
-    "heart": {
-        "endothelial cell": ["PECAM1", "VWF", "KDR", "CLDN5", "ENG"],
-        "fibroblast": ["COL1A1", "COL1A2", "DCN", "LUM", "PDGFRA"],
-        "lymphocyte": ["PTPRC", "CD3D", "CD3E", "IL7R", "CD2"],
-        "mural_cell": ["RGS5", "PDGFRB", "ACTA2", "TAGLN", "MYH11"],
-        "myeloid cell": ["LYZ", "CD68", "CSF1R", "HLA-DRA", "ITGAM"]
-    },
-    
-    "lung": {
-        "endothelial_cell": ["PECAM1", "VWF", "KDR", "CLDN5", "ENG"],
-        "fibroblast": ["COL1A1", "COL1A2", "DCN", "LUM", "PDGFRA"],
-    },
-    
-    "kidney": {
-        "endothelial_cell": ["PECAM1", "VWF", "KDR"],
-    },
-}
-
 def compute_gene_distribution(X, aggregate, epsilon):
     """
     Computes a probability distribution over genes.
@@ -156,4 +137,9 @@ def calculate_distance(data1, data2, distance="JS", aggregate=True, reduction='m
     elif reduction == 'sum':
         return np.sum(metric)
     else:
-        return metric 
+        return metric
+    
+def extract_ensg(adata, gene_id_key="gene_id"):
+    if gene_id_key in adata.var.columns:
+        return adata.var[gene_id_key].astype(str).values
+    return np.asarray(adata.var_names.astype(str))

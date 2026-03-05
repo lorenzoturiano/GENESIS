@@ -15,21 +15,16 @@ data = Path("/project/Wellcome_Discovery/datashare/lturiano/data/")
 home = Path("/project/Wellcome_Discovery/lturiano/GENESIS/")
 sriva = Path("/project/Wellcome_Discovery/datashare/sriva/GENESIS/")
 
-rna = sc.read_h5ad(data / "rna_filt_aligned.h5ad")
-gex = sc.read_h5ad(data / "gex_filt_aligned.h5ad")
+rna = sc.read_h5ad(sriva / "RNA_filt_log_subset.h5ad")
+gex = sc.read_h5ad(sriva / "GEX_filt_log_subset.h5ad")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 custom = CustomDataloader(gex, rna, batch_size=64, seed=42)
 dataloader = custom.get_dataloader()
 
 gene_emb_dim = 2048
-hidden_dims  = [8192, 4096, 2048, 1024, 512]
-latent_dim   = 256
-
-# gene_emb_dim = 4096
-# hidden_dims  = [16384, 8192, 4096, 2048, 1024]
-# latent_dim   = 512
-
+hidden_dims  = [1024, 512, 256]
+latent_dim   = 128
 
 vae = RNA_VAE_UNET(
     input_dim=gex.n_vars,
@@ -47,7 +42,7 @@ vae.fit(
         beta=0.1,
         lr=1e-4,
         threshold=False,
-        name_prefix="KLfix+warmup_PermInv_VAE_UNET",
+        name_prefix="PermInv_VAE_UNET",
         out_dir=home / "02_weights/",
         gex_gene_ids_inorder=gex.var_names.tolist(),   # pass gex.var["gene_id"] (or var_names) here if you want to save mapping
         extra_vocab_meta=None,       # optional dict to add to vocab meta json
@@ -68,5 +63,6 @@ print("Max value gene_exp:", gex.X.max())
 print("Max value rna_exp :", rna.X.max())
 print("Max value rna_fake:", rna_fake.X.max())
 
-rna_fake.write(data / "KLfix+warmup_fake_PermInv_VAE_UNET.h5ad", compression="gzip")
-print("Object saved")
+file_name = "latent128_breast_nonzeroMSE_fake_PermInv_VAE_UNET.h5ad"
+rna_fake.write(data / file_name, compression="gzip")
+print(f"Object: {file_name} saved!")

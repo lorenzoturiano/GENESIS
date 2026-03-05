@@ -289,15 +289,20 @@ class RNA_VAE_UNET(nn.Module):
                 real_rna = real_rna.to(self.device)
 
                 recon_x, mu, logvar = self.forward(gene_exp)
-                kld_per_sample = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)  # (B,)
-                KLD = kld_per_sample.mean()
+
+                kld_per_dim = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())  # (B, latent_dim)
+                KLD = kld_per_dim.sum(dim=1).mean()  # scalar: mean over batch
 
                 if threshold:
                     zero_fraction = (real_rna == 0).float().mean()
                     th = torch.quantile(recon_x, zero_fraction)
                     recon_x = torch.where(recon_x < th, torch.tensor(0.0, device=recon_x.device), recon_x)
 
-                rec_loss = self.recon_loss(recon_x, real_rna)
+                alpha = 5.0  # try 3, 5, 10
+                w = 1.0 + alpha * (real_rna > 0).float()
+                rec_loss = ((recon_x - real_rna) ** 2 * w).mean()
+
+                # rec_loss = self.recon_loss(recon_x, real_rna)
                 
                 # warm up
                 beta_target = beta
@@ -305,7 +310,6 @@ class RNA_VAE_UNET(nn.Module):
                 beta_t = beta_target * min(1.0, (epoch + 1) / warmup_epochs)
 
                 loss = rec_loss + beta_t * KLD
-                # loss = rec_loss + beta * KLD
                 loss.backward()
                 optimizer.step()
 

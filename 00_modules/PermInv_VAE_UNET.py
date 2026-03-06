@@ -73,23 +73,6 @@ def save_gex_vocab_metadata(out_dir, name_prefix, gene_ids_inorder, extra_meta=N
     return {"map": map_path, "genes": genes_path, "meta": meta_path}
 
 
-# A simple fully-connected residual block.
-class ResidualBlock(nn.Module):
-    def __init__(self, in_features, out_features):
-        super().__init__()
-        self.linear = nn.Linear(in_features, out_features)
-        self.bn = nn.BatchNorm1d(out_features)
-        self.relu = nn.ReLU(inplace=False)
-        self.residual = nn.Linear(in_features, out_features) if in_features != out_features else nn.Identity()
-
-    def forward(self, x):
-        identity = self.residual(x)
-        out = self.linear(x)
-        out = self.bn(out)
-        out = self.relu(out)
-        return out + identity
-
-
 # Weighted-mean pooling over genes (assumes fixed input gene order).
 # NOTE: True permutation invariance across datasets requires gene_idx/reorder logic,
 # which you explicitly do NOT want to implement right now. So we keep the simple version.
@@ -109,6 +92,24 @@ class GeneExpressionWeightedPool(nn.Module):
         w = x / (x.sum(dim=1, keepdim=True) + self.eps)   # (B, G)
         E = self.embedding.weight                         # (G, D)
         return w @ E                                      # (B, D)
+
+
+# A simple fully-connected residual block.
+class ResidualBlock(nn.Module):
+    def __init__(self, in_features, out_features):
+        super().__init__()
+        self.linear = nn.Linear(in_features, out_features)
+        self.bn = nn.BatchNorm1d(out_features)
+        self.relu = nn.ReLU(inplace=False)
+        self.residual = nn.Linear(in_features, out_features) if in_features != out_features else nn.Identity()
+
+    def forward(self, x):
+        identity = self.residual(x)
+        out = self.linear(x)
+        out = self.bn(out)
+        out = self.relu(out)
+        return out + identity
+
 
 
 class Encoder(nn.Module):
@@ -230,12 +231,14 @@ class RNA_VAE_UNET(nn.Module):
         reversed_hidden = list(reversed(list(hidden_dims)))
         self.decoder = Decoder(latent_dim, output_dim, reversed_hidden=reversed_hidden, normalized=normalized).to(self.device)
 
+
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
 
     def forward(self, x):
+        # x: (B, G) log1p GEX
         if self.use_gene_pool:
             x = self.gene_pool(x)  # (B, gene_emb_dim)
 
